@@ -1,0 +1,69 @@
+/* Общие стили для body: шрифт, отступы, фон */
+body {
+    font-family: Arial, sans-serif; /* Шрифт */
+    margin: 0;                       /* Убираем внешние отступы */
+    padding: 0;                      /* Убираем внутренние отступы */
+    background: #f5f5f5;             /* Светло-серый фон */
+}
+/* Стили для шапки */
+header {
+    background: #2c3e50; /* Темно-синий фон */
+    color: white;        /* Белый текст */
+    padding: 15px 30px;  /* Отступы внутри шапки */
+}
+header h1 {
+    margin: 0; /* Убираем отступ у заголовка */
+}
+/* Стили для блока с данными студента */
+.student-info {
+    margin: 5px 0;    /* Небольшие отступы */
+    font-size: 14px;  /* Меньший шрифт */
+    color: #ecf0f1;   /* Светлый текст */
+}
+/* Стили для навигации */
+nav a {
+    color: #ecf0f1;        /* Светлый текст */
+    margin-right: 15px;    /* Отступ между ссылками */
+    text-decoration: none; /* Убираем подчеркивание */
+}
+nav a:hover {
+    text-decoration: underline; /* Подчеркивание при наведении */
+}
+/* Стили для основной части */
+main {
+    padding: 20px 30px; /* Отступы */
+}
+/* Стили для блока управления (поиск, сортировка) */
+.controls {
+    margin-bottom: 20px; /* Отступ снизу */
+}
+.controls input, .controls select, .controls button {
+    padding: 8px;         /* Внутренние отступы */
+    margin-right: 10px;   /* Отступ справа */
+}
+/* Стили для карточки сотрудника */
+.employee-card {
+    background: white;           /* Белый фон */
+    border: 1px solid #ddd;      /* Светло-серая рамка */
+    border-radius: 6px;          /* Закругленные углы */
+    padding: 15px;               /* Внутренние отступы */
+    margin-bottom: 10px;         /* Отступ снизу */
+}
+.employee-card h3 {
+    margin: 0 0 10px 0; /* Отступ только снизу */
+}
+.employee-card p {
+    margin: 5px 0; /* Небольшие отступы */
+}
+/* Стили для форм */
+form input, form select, form button {
+    display: block;      /* Каждый элемент с новой строки */
+    margin: 8px 0;       /* Отступы */
+    padding: 8px;        /* Внутренние отступы */
+    width: 300px;        /* Ширина */
+}
+/* Стили для сообщений об ошибках */
+#message {
+    color: #c0392b;      /* Красный цвет */
+    font-weight: bold;   /* Жирный шрифт */
+}

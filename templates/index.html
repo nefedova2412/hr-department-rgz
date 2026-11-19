@@ -1,0 +1,321 @@
+<!-- Наследуемся от базового шаблона (header, nav, footer) -->
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Стили для модального окна редактирования -->
+<style>
+    /* Модальное окно: скрыто по умолчанию, перекрывает весь экран */
+    .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+    /* Содержимое модального окна: белый фон, отступы, центрирование */
+    .modal-content { background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; }
+    /* Крестик для закрытия */
+    .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+    .close:hover { color: black; }
+</style>
+
+<!-- Блок управления: поиск и сортировка -->
+<div class="controls">
+    <!-- Поле поиска (по ФИО, должности, email, телефону) -->
+    <input type="text" id="search" placeholder="Поиск по ФИО, должности, email, телефону">
+    <!-- Выпадающий список полей для сортировки -->
+    <select id="sort">
+        <option value="id">По ID</option>
+        <option value="full_name">По ФИО</option>
+        <option value="position">По должности</option>
+        <option value="gender">По полу</option>
+        <option value="phone">По телефону</option>
+        <option value="email">По email</option>
+        <option value="probation">По испытательному сроку</option>
+        <option value="hire_date">По дате устройства</option>
+    </select>
+    <!-- Выпадающий список направления сортировки -->
+    <select id="order">
+        <option value="asc">По возрастанию</option>
+        <option value="desc">По убыванию</option>
+    </select>
+    <!-- Кнопка "Найти" (запускает загрузку с offset=0) -->
+    <button onclick="loadEmployees(0)">Найти</button>
+</div>
+
+<!-- Блок с кнопкой "Добавить" (скрыт по умолчанию, показывается только авторизованным) -->
+<div id="admin-controls" style="display: none; margin: 10px 0;">
+    <button onclick="showAddForm()">Добавить сотрудника</button>
+</div>
+
+<!-- Форма добавления (скрыта по умолчанию) -->
+<div id="add-form-container" style="display:none;">
+    <h3>Новый сотрудник</h3>
+    <form id="add-form" onsubmit="addEmployee(event)">
+        <input type="text" name="full_name" placeholder="ФИО" required>
+        <input type="text" name="position" placeholder="Должность" required>
+        <select name="gender" required>
+            <option value="М">М</option>
+            <option value="Ж">Ж</option>
+        </select>
+        <input type="text" name="phone" placeholder="Телефон" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <label><input type="checkbox" name="probation"> На испытательном сроке</label>
+        <input type="date" name="hire_date" required>
+        <button type="submit">Сохранить</button>
+        <button type="button" onclick="hideAddForm()">Отмена</button>
+    </form>
+</div>
+
+<!-- Модальное окно для редактирования -->
+<div id="edit-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeEditModal()">&times;</span>
+        <h3>Редактировать сотрудника</h3>
+        <form id="edit-form" onsubmit="updateEmployee(event)">
+            <!-- Скрытое поле для id -->
+            <input type="hidden" name="id" id="edit-id">
+            <input type="text" name="full_name" placeholder="ФИО" required>
+            <input type="text" name="position" placeholder="Должность" required>
+            <select name="gender" required>
+                <option value="М">М</option>
+                <option value="Ж">Ж</option>
+            </select>
+            <input type="text" name="phone" placeholder="Телефон" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <label><input type="checkbox" name="probation"> На испытательном сроке</label>
+            <input type="date" name="hire_date" required>
+            <button type="submit">Сохранить</button>
+            <button type="button" onclick="closeEditModal()">Отмена</button>
+        </form>
+    </div>
+</div>
+
+<!-- Контейнер для карточек сотрудников -->
+<div id="employee-list"></div>
+
+<!-- Кнопка "Показать ещё" (скрыта по умолчанию) -->
+<button id="next-btn" onclick="loadNext()" style="display:none; margin-top: 15px;">Показать ещё</button>
+
+<script>
+// Текущее смещение для пагинации (сколько записей уже загружено)
+let currentOffset = 0;
+
+// Количество записей на странице (по требованию методички — не более 20)
+const limit = 20;
+
+// Глобальная переменная для хранения статуса авторизации.
+// Проверяется один раз перед загрузкой и не сбрасывается при поиске.
+let isAuthorized = false;
+
+// ФУНКЦИЯ ЗАГРУЗКИ СОТРУДНИКОВ
+async function loadEmployees(offset) {
+    // Запоминаем текущее смещение (нужно для кнопки "Показать ещё")
+    currentOffset = offset;
+
+    // Получаем значения из полей поиска и сортировки
+    const search = document.getElementById('search').value;
+    const sort = document.getElementById('sort').value;
+    const order = document.getElementById('order').value;
+
+    // Шаг 1: Проверяем авторизацию 
+    try {
+        const authRes = await fetch('/api/jsonrpc', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({jsonrpc: '2.0', method: 'checkAuth', params: {}, id: 2})
+        });
+        const authData = await authRes.json();
+        // Сохраняем статус авторизации в глобальную переменную
+        isAuthorized = authData.result && authData.result.authenticated;
+        
+        // Показываем/скрываем кнопку "Добавить" в зависимости от статуса
+        document.getElementById('admin-controls').style.display = isAuthorized ? 'block' : 'none';
+    } catch (e) {
+        console.error("Ошибка авторизации", e);
+        isAuthorized = false;
+        document.getElementById('admin-controls').style.display = 'none';
+    }
+
+    // Шаг 2: Запрашиваем сотрудников с учетом пагинации 
+    const res = await fetch('/api/jsonrpc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'getEmployees',
+            params: {offset: offset, search: search, sort: sort, order: order},
+            id: Date.now() // Уникальный id запроса
+        })
+    });
+    const data = await res.json();
+    const result = data.result;
+    const container = document.getElementById('employee-list');
+    
+    // Если это первая загрузка (offset = 0) — очищаем контейнер
+    if (offset === 0) container.innerHTML = '';
+
+    // Шаг 3: Отрисовываем карточки сотрудников
+    result.employees.forEach(emp => {
+        const card = document.createElement('div');
+        card.className = 'employee-card';
+
+        // Если пользователь авторизован — добавляем кнопки
+        let actionsHtml = '';
+        if (isAuthorized) {
+            actionsHtml = `
+                <div class="admin-actions">
+                    <button onclick="editEmployee(${emp.id})">Редактировать</button>
+                    <button onclick="deleteEmployee(${emp.id})">Удалить</button>
+                </div>
+            `;
+        }
+
+        // Заполняем карточку HTML-кодом с данными сотрудника
+        card.innerHTML = `
+            <h3>${emp.full_name}</h3>
+            <p>Должность: ${emp.position}</p>
+            <p>Пол: ${emp.gender} | Телефон: ${emp.phone}</p>
+            <p>Email: ${emp.email}</p>
+            <p>Испытательный срок: ${emp.probation ? 'Да' : 'Нет'}</p>
+            <p>Дата устройства: ${emp.hire_date}</p>
+            ${actionsHtml}
+        `;
+        container.appendChild(card);
+    });
+
+    // Шаг 4: Управляем видимостью кнопки "Показать ещё" 
+    // Показываем, если текущая позиция + 20 меньше общего количества сотрудников
+    document.getElementById('next-btn').style.display =
+        (offset + limit < result.total) ? 'block' : 'none';
+}
+
+
+// ФУНКЦИЯ ЗАГРУЗКИ СЛЕДУЮЩЕЙ ПОРЦИИ (кнопка "Показать ещё")
+function loadNext() {
+    // Загружаем следующие 20 сотрудников (offset + limit)
+    loadEmployees(currentOffset + limit);
+}
+
+// ФУНКЦИИ ПОКАЗА/СКРЫТИЯ ФОРМЫ ДОБАВЛЕНИЯ
+function showAddForm() { 
+    document.getElementById('add-form-container').style.display = 'block'; 
+}
+function hideAddForm() { 
+    document.getElementById('add-form-container').style.display = 'none'; 
+}
+
+// ДОБАВЛЕНИЕ СОТРУДНИКА
+async function addEmployee(event) {
+    event.preventDefault(); // Отменяем стандартную отправку формы
+    const form = event.target;
+    
+    // Собираем данные из формы
+    const params = {
+        full_name: form.full_name.value,
+        position: form.position.value,
+        gender: form.gender.value,
+        phone: form.phone.value,
+        email: form.email.value,
+        probation: form.probation.checked ? 1 : 0,
+        hire_date: form.hire_date.value
+    };
+    
+    // Отправляем JSON-RPC запрос addEmployee
+    const res = await fetch('/api/jsonrpc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({jsonrpc: '2.0', method: 'addEmployee', params: params, id: 3})
+    });
+    const data = await res.json();
+    
+    if (data.result && data.result.success) {
+        hideAddForm();       // Скрываем форму
+        loadEmployees(0);    // Перезагружаем список с начала
+    } else {
+        alert(data.result?.error?.message || 'Ошибка');
+    }
+}
+
+// УДАЛЕНИЕ СОТРУДНИКА
+async function deleteEmployee(id) {
+    // Запрашиваем подтверждение
+    if (!confirm('Удалить сотрудника?')) return;
+    
+    // Отправляем JSON-RPC запрос deleteEmployee
+    const res = await fetch('/api/jsonrpc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({jsonrpc: '2.0', method: 'deleteEmployee', params: {id: id}, id: 4})
+    });
+    const data = await res.json();
+    
+    if (data.result && data.result.success) {
+        loadEmployees(0); // Перезагружаем список
+    } else {
+        alert(data.result?.error?.message || 'Ошибка');
+    }
+}
+
+// ОТКРЫТИЕ МОДАЛЬНОГО ОКНА ДЛЯ РЕДАКТИРОВАНИЯ
+function editEmployee(id) {
+    // Запрашиваем данные сотрудника по id
+    fetch('/api/jsonrpc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({jsonrpc: '2.0', method: 'getEmployeeById', params: {id: id}, id: 5})
+    }).then(res => res.json()).then(data => {
+        if (data.result && data.result.employee) {
+            const emp = data.result.employee;
+            // Заполняем поля формы редактирования
+            document.getElementById('edit-id').value = emp.id;
+            document.getElementById('edit-form').full_name.value = emp.full_name;
+            document.getElementById('edit-form').position.value = emp.position;
+            document.getElementById('edit-form').gender.value = emp.gender;
+            document.getElementById('edit-form').phone.value = emp.phone;
+            document.getElementById('edit-form').email.value = emp.email;
+            document.getElementById('edit-form').probation.checked = emp.probation === 1;
+            document.getElementById('edit-form').hire_date.value = emp.hire_date;
+            // Показываем модальное окно
+            document.getElementById('edit-modal').style.display = 'block';
+        }
+    });
+}
+// ЗАКРЫТИЕ МОДАЛЬНОГО ОКНА
+function closeEditModal() { 
+    document.getElementById('edit-modal').style.display = 'none'; 
+}
+
+// СОХРАНЕНИЕ ИЗМЕНЕНИЙ ПРИ РЕДАКТИРОВАНИИ
+async function updateEmployee(event) {
+    event.preventDefault(); // Отменяем стандартную отправку
+    const form = event.target;
+    
+    // Собираем данные из формы редактирования
+    const params = {
+        id: form.id.value,
+        full_name: form.full_name.value,
+        position: form.position.value,
+        gender: form.gender.value,
+        phone: form.phone.value,
+        email: form.email.value,
+        probation: form.probation.checked ? 1 : 0,
+        hire_date: form.hire_date.value
+    };
+    
+    // Отправляем JSON-RPC запрос updateEmployee
+    const res = await fetch('/api/jsonrpc', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({jsonrpc: '2.0', method: 'updateEmployee', params: params, id: 6})
+    });
+    const data = await res.json();
+    
+    if (data.result && data.result.success) {
+        closeEditModal();    // Закрываем окно
+        loadEmployees(0);    // Перезагружаем список
+    } else {
+        alert(data.result?.error?.message || 'Ошибка');
+    }
+}
+
+// НАЧАЛЬНАЯ ЗАГРУЗКА ПРИ ОТКРЫТИИ СТРАНИЦЫ
+window.addEventListener('DOMContentLoaded', () => {
+    loadEmployees(0);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,58 @@
+<!-- Наследуемся от базового шаблона base.html (шапка, навигация, подвал) -->
+{% extends "base.html" %}
+{% block content %}
+<h2>Регистрация кадровика</h2>
+
+<!-- Форма регистрации. id="register-form" нужен, чтобы повесить обработчик из JS -->
+<form id="register-form">
+    <!-- Текстовое поле для логина. name="username" — по этому имени получаем значение в JS -->
+    <input type="text" name="username" placeholder="Логин (латиница, 3-30 символов)" required>
+    <!-- Поле для пароля. type="password" скрывает символы звёздочками -->
+    <input type="password" name="password" placeholder="Пароль (6-50 символов)" required>
+    <!-- Кнопка отправки формы. type="submit" инициирует событие submit -->
+    <button type="submit">Зарегистрироваться</button>
+</form>
+
+<!-- Блок для вывода сообщений (об успехе или об ошибке) -->
+<p id="message"></p>
+
+<script>
+// Находим форму по id и вешаем на событие submit асинхронный обработчик
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+    // Отменяем стандартное поведение формы (перезагрузку страницы)
+    e.preventDefault();
+    // Получаем форму, которая была отправлена (чтобы обратиться к её полям)
+    const form = e.target;
+    // Отправляем JSON-RPC запрос на сервер для регистрации
+    const res = await fetch('/api/jsonrpc', {
+        // Метод HTTP — POST (JSON-RPC всегда POST)
+        method: 'POST',
+        // Сообщаем серверу, что отправляем JSON
+        headers: {'Content-Type': 'application/json'},
+        // Тело запроса — JSON-строка с параметрами
+        body: JSON.stringify({
+            jsonrpc: '2.0',       // Версия протокола JSON-RPC
+            method: 'register',   // Имя метода на сервере
+            params: {
+                // Значение поля "логин" из формы
+                username: form.username.value,
+                // Значение поля "пароль" из формы
+                password: form.password.value
+            },
+            id: 1                 // Идентификатор запроса (для сопоставления ответа)
+        })
+    });
+    // Преобразуем ответ сервера (JSON-строку) в JavaScript-объект
+    const data = await res.json();
+    // Проверяем, что регистрация прошла успешно (success === true)
+    if (data.result && data.result.success) {
+        // При успехе выводим сообщение с предложением перейти на страницу входа
+        document.getElementById('message').textContent = 'Регистрация успешна! Перейдите на страницу входа.';
+    } else {
+        // Если ошибка (например, логин занят или невалиден) — выводим её текст
+        // data.result?.error?.message — берем текст ошибки из ответа, если он есть
+        document.getElementById('message').textContent = data.result?.error?.message || 'Ошибка';
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,58 @@
+<!-- Наследуемся от базового шаблона base.html (шапка, навигация, подвал) -->
+{% extends "base.html" %}
+{% block content %}
+<h2>Вход для кадровика</h2>
+
+<!-- Форма входа. id="login-form" нужен, чтобы повесить обработчик из JS -->
+<form id="login-form">
+    <!-- Текстовое поле для логина. name="username" — по этому имени получаем значение в JS -->
+    <input type="text" name="username" placeholder="Логин (латиница)" required>
+    <!-- Поле для пароля. type="password" скрывает символы звёздочками -->
+    <input type="password" name="password" placeholder="Пароль" required>
+    <!-- Кнопка отправки формы. type="submit" инициирует событие submit -->
+    <button type="submit">Войти</button>
+</form>
+
+<!-- Блок для вывода сообщений об ошибках (если логин/пароль неверные) -->
+<p id="message"></p>
+
+<script>
+// Находим форму по id и вешаем на событие submit асинхронный обработчик
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    // Отменяем стандартное поведение формы (перезагрузку страницы)
+    e.preventDefault();
+    // Получаем форму, которая была отправлена (чтобы обратиться к её полям)
+    const form = e.target;
+    // Отправляем JSON-RPC запрос на сервер для авторизации
+    const res = await fetch('/api/jsonrpc', {
+        // Метод HTTP — POST (JSON-RPC всегда POST)
+        method: 'POST',
+        // Сообщаем серверу, что отправляем JSON
+        headers: {'Content-Type': 'application/json'},
+        // Тело запроса — JSON-строка с параметрами
+        body: JSON.stringify({
+            jsonrpc: '2.0',     // Версия протокола JSON-RPC
+            method: 'login',    // Имя метода на сервере
+            params: {
+                // Значение поля "логин" из формы
+                username: form.username.value,
+                // Значение поля "пароль" из формы
+                password: form.password.value
+            },
+            id: 1               // Идентификатор запроса (для сопоставления ответа)
+        })
+    });
+    // Преобразуем ответ сервера (JSON-строку) в JavaScript-объект
+    const data = await res.json();
+    // Проверяем, что запрос выполнен успешно (success === true)
+    if (data.result && data.result.success) {
+        // При успехе перенаправляем пользователя на главную страницу
+        window.location.href = '/';
+    } else {
+        // Если ошибка (неверный логин или пароль) — выводим сообщение
+        // data.result?.error?.message — берем текст ошибки из ответа, если он есть
+        document.getElementById('message').textContent = data.result?.error?.message || 'Ошибка';
+    }
+});
+</script>
+{% endblock %}

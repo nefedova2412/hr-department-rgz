@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Отдел кадров</title>
+    <!-- Подключаем стили из папки static -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>Отдел кадров</h1>
+        <!-- Обязательные данные студента -->
+        <p class="student-info">Нефедова Виктория Дмитриевна, группа ФБИ-44</p>
+        <nav>
+            <a href="/">Главная</a>
+            <!-- Ссылки для входа/регистрации (скрываются, если авторизован) -->
+            <a href="/login" id="login-link">Вход</a>
+            <a href="/register" id="register-link">Регистрация</a>
+            <!-- Ссылка "Выход" (показывается, если авторизован) -->
+            <a href="#" id="logout-link" style="display:none;" onclick="doLogout(); return false;">Выход</a>
+            <!-- Здесь выводится имя пользователя -->
+            <span id="user-info"></span>
+        </nav>
+    </header>
+    <main>
+        <!-- Сюда вставляется содержимое дочерних шаблонов -->
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+        // Проверка авторизации при загрузке страницы (для отображения ссылок в шапке)
+        async function checkAuth() {
+            const res = await fetch('/api/jsonrpc', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({jsonrpc: '2.0', method: 'checkAuth', params: {}, id: 1})
+            });
+            const data = await res.json();
+            const result = data.result;
+            const loginLink = document.getElementById('login-link');
+            const registerLink = document.getElementById('register-link');
+            const logoutLink = document.getElementById('logout-link');
+            const userInfo = document.getElementById('user-info');
+
+            if (result.authenticated) {
+                // Если авторизован — скрываем вход/регистрацию, показываем выход
+                loginLink.style.display = 'none';
+                registerLink.style.display = 'none';
+                logoutLink.style.display = 'inline';
+                userInfo.textContent = 'Вы вошли как: ' + result.username;
+            } else {
+                // Если гость — показываем вход/регистрацию, скрываем выход
+                loginLink.style.display = 'inline';
+                registerLink.style.display = 'inline';
+                logoutLink.style.display = 'none';
+                userInfo.textContent = '';
+            }
+        }
+
+        // Выход из системы
+        async function doLogout() {
+            await fetch('/api/jsonrpc', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({jsonrpc: '2.0', method: 'logout', params: {}, id: 2})
+            });
+            window.location.href = '/'; // Перезагружаем страницу
+        }
+
+        // Вызываем проверку при загрузке
+        checkAuth();
+    </script>
+</body>
+</html>
